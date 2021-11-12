@@ -23,6 +23,7 @@ object ImageId {
 
 /**
  * A repository for images.
+ * TODO: investigate transaction/session capability
  *
  * @param dbConfigProvider The Play db config provider. Play will inject this for you.
  */

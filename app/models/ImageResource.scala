@@ -7,10 +7,10 @@ import scala.concurrent.{ExecutionContext, Future}
 
 /**
  * DTO for displaying image information
- * @param id
- * @param name
- * @param filePath
- * @param detectionEnabled
+ * @param id optional long - new cases
+ * @param name String name of image
+ * @param path String path of image
+ * @param detectionEnabled whether to turn on detection for image
  */
 case class ImageResource(id: Option[Long] = None, name: String, path: String, detectionEnabled: Boolean = false)
 
@@ -20,6 +20,8 @@ object ImageResource {
 
 /**
  * Controls access to the backend data, returning [[ImageResource]]
+ * TODO: figure out caching - play CacheAPI?
+ * TODO: update?
  */
 class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit ec: ExecutionContext) {
 
@@ -43,14 +45,15 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
     }*/
 
     /**
-     * TODO: should this be
-     * @param image
+     * Create an image
+     * TODO: error handling with Form
+     * @param image ImageResource
      * @return
      */
     def create (image: ImageResource): Future[ImageResource] = {
-        //TODO: yuck fake id, figure out later, egads slick.
+        //TODO: yuck null (do this later ExistingImage versus Image, with Existing trait maybe)
         val id = image.id.map(thisId => ImageId(thisId))
-        val data = ImageData(id.orNull, name = image.name, path = image.path, detectionEnabled = image.detectionEnabled)
+        val data = ImageData(null, name = image.name, path = image.path, detectionEnabled = image.detectionEnabled)
         imageRepository.create(data).map(createImageResource)
     }
 
@@ -60,9 +63,23 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
       })
 
     def get(id: String): Future[Option[ImageResource]] = imageRepository.findById(ImageId(id))
-      .map((imageRow => imageRow.map(createImageResource)))
+      .map(imageRow => imageRow.map(createImageResource))
+
+    def exists(id: String): Future[Boolean] = get(id).map(_.isDefined)
 
     def remove(id: String): Future[Int] = imageRepository.remove(ImageId(id))
+
+    /**
+     * Remove an image.
+     * TODO: throws generic illegal argument exception should probably handle more elegantly
+     * @param image ImageResource the dto
+     * @return
+     */
+    def remove(image: ImageResource): Future[Int] = {
+        require(image.id.isDefined) //todo; lazy way handle checking id. just throws generic IllegalArgException
+        val imageToDelete = ImageData(ImageId(image.id.get), image.name, image.path, image.detectionEnabled)
+        imageRepository.remove(imageToDelete)
+    }
 
     private def createImageResource(data: ImageData): ImageResource =
         ImageResource(Some(data.id.value), data.name, data.path, data.detectionEnabled)
