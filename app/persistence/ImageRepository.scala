@@ -1,4 +1,4 @@
-package models
+package persistence
 
 import play.api.db.slick.DatabaseConfigProvider
 import slick.jdbc.JdbcProfile
@@ -7,7 +7,9 @@ import slick.lifted.MappedTo
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
+//todo: we should probably use UUID for uniqueness in a potential replicated environment
 final case class ImageData(id: ImageId, name: String, path: String, detectionEnabled: Boolean = false)
+
 
 case class ImageId(value: Long) extends MappedTo[Long] {
   override def toString: String = value.toString
