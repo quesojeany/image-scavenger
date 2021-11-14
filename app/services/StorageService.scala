@@ -19,7 +19,7 @@ import scala.concurrent.{ExecutionContext, Future}
  * handle generic StorageFiles or models that are "uploadable" and "downloadable" etc.
  * NOTE: we are using the default execution context and wsclient plugged from play.  We probably
  * could create a separate custom execution context, but not going to right now.
- * use generics? have to use TypeLiteral bindings with Guice
+ * use generics--> have to use TypeLiteral bindings with Guice
  * this abstraction might be unnecessary
  */
 @ImplementedBy(classOf[GoogleStorageService])
@@ -47,14 +47,12 @@ class GoogleStorageService @Inject() (ws: WSClient, ec: ExecutionContext) extend
   protected val uploadTimeout = 5000.millis
   private val logger = Logger(getClass)
 
-
-
   override def upload(tmpFile: FilePart[File]): Future[WSResponse] = {
     logger.info(s"key = ${tmpFile.key}, filename = ${tmpFile.filename}, contentType = ${tmpFile.contentType}, file = $tmpFile.ref, fileSize = ${tmpFile.fileSize}, dispositionType = ${tmpFile.dispositionType}")
 
     val request = ws.url(uploadUrl)
       .addQueryStringParameters("uploadType" -> "media", "name" -> tmpFile.filename)
-      .addHttpHeaders("Content-Type" -> tmpFile.contentType.get)
+      .addHttpHeaders("Content-Type" -> tmpFile.contentType.get, "Content-Length" -> tmpFile.fileSize.toString)
       .withRequestTimeout(requestTimeout)
 
     request.post(

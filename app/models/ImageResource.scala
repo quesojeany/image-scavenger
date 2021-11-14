@@ -1,7 +1,8 @@
 package models
 
+import akka.http.scaladsl.model.{ContentType, MediaType, MediaTypes}
 import persistence.{ImageData, ImageId, ImageRepository}
-import play.api.libs.json.{Json, OFormat}
+import play.api.libs.json.{JsPath, JsValue, Json, OFormat, Reads, Writes}
 
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
@@ -17,7 +18,8 @@ case class ImageResource(id: Long = 0,
                          name: String = "defaultPoop",
                          storedPath: String = "defaultStoredPath",
                          detectionEnabled: Boolean = false,
-                         //mediaType: MediaType,
+                         annotations: Seq[Annotation] = Seq(),
+                         mediaType: String = "",
                          fileName: String = "defaultFileNamePoop",
                          downloadUrl: String = "thisshouldnotbeaccesibleDownloadUrl",
                         ) extends Storable with Detectable {
@@ -26,7 +28,7 @@ case class ImageResource(id: Long = 0,
 }
 
 object ImageResource {
-    implicit val imageFormat: OFormat[ImageResource] = Json.using[Json.WithDefaultValues].format[ImageResource]
+    implicit val imageFormat = Json.using[Json.WithDefaultValues].format[ImageResource]
 }
 
 /**
@@ -68,6 +70,10 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
         imageRepository.create(data).map(toImageResource)
     }
 
+    /*def update(image: ImageResource): Future[ImageResource] = {
+        imageRepository.update(data).map(toImageResource())
+    }*/
+
     def list(): Future[Seq[ImageResource]] = imageRepository.list()
       .map(imageRows => {
         imageRows.map(toImageResource)
@@ -95,7 +101,7 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
     // probably better way to apply and unapply these models, but for right now blargh time.
     // todo: get rid of hardcoded media type
     private def toImageResource(data: ImageData): ImageResource =
-        ImageResource(data.id.value, data.name, data.path, data.detectionEnabled/*mediaType = MediaTypes.`image/jpeg`*/)
+        ImageResource(data.id.value, data.name, data.path, data.detectionEnabled, mediaType = "")
 
     def toImageData(image: ImageResource) = ImageData(ImageId(image.id), image.name, image.storedPath, image.detectionEnabled)
 

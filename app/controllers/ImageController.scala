@@ -12,7 +12,8 @@ import play.api.libs.streams.Accumulator
 import play.api.mvc.MultipartFormData.FilePart
 import play.api.mvc._
 import play.core.parsers.Multipart.{FileInfo, FilePartHandler}
-import services.StorageService
+import services.DetectionService.DetectionResource
+import services.{DetectionService, StorageService}
 
 import java.io.File
 import java.nio.file.{Path, Files => JFiles}
@@ -34,6 +35,7 @@ object ImageController {
 class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
                                   cc: MessagesControllerComponents,
                                   ss: StorageService,
+                                  ds: DetectionService
                                 )(implicit ec: ExecutionContext)
   extends MessagesAbstractController(cc) {
 
@@ -61,12 +63,38 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
     }
   }
 
-  //abstract out the storage server elsewhere, but this is fine for demo purposes.
-  //def upload() = {}
+  def createAndDetect() = Action.async { implicit request =>
+    val json = request.body.asJson.get
+    //todo should use Form?
+    val imageResource = json.as[ImageResource]
+    val newPossiblyEnhancedImage = for {
+      annotatedImage <- detect(imageResource)
+      newImage  <- imageResourceHandler.create(annotatedImage)
+    } yield newImage
+
+    newPossiblyEnhancedImage.map { newImage =>
+      Ok(Json.toJson(newImage))
+    }
+  }
+
+  /**
+   * If enabled, will return an ImageResource with annotations, otherwise just the original ImageResource
+   * TODO: I feel like this could be in a better place, but fine.
+   * @param image ImageResource
+   * @return Future[ImageResource]
+   */
+  private def detect(image: ImageResource): Future[ImageResource] = Option(image.detectionEnabled)
+    .filter(_ == true)
+    .map(_ => {
+      ds.detect(image).map(detectionResults => {
+        image.copy(annotations = detectionResults.annotations)
+      })
+    }).getOrElse(Future.successful(image))
 
   /**
    * A REST endpoint that gets all the images as JSON.
    * If none, returns empty json array.
+   * TODO: Search by annotation or tag (;
    */
   def list = Action.async { implicit request =>
     imageResourceHandler.list().map { images =>
@@ -101,12 +129,35 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
     }
   }
 
+  def upload() = Action(parse.multipartFormData(handleFilePartAsFile)) { implicit request =>
+    request.body.file("file").map { filePart =>
+      logger.info("I AM ABOUT TO UPLOAD TO GOOGLE")
+        //TODO: handle errors here please and dont forget to delete
+        val response = ss.upload(filePart).onComplete {
+          case Success(whatever) => logger.debug(s"THE RESPONSE BITCH ${whatever.json}")
+          deleteTempFile(filePart.ref)
+          case Failure(e) => logger.error("Something went terrible wrong", e)
+        }
+        logger.debug(response.toString)
+      Ok(s"Felicitaciones, your file ${filePart.filename} has been uploaded!!!")
+    }.getOrElse(BadRequest(Json.toJson(ErrorResource("Dang, we are missing the file to upload"))))
+  }
+
+  def download(id: String) = Action.async { implicit request =>
+    imageResourceHandler.get(id).flatMap {
+      case None => Future.successful(
+        NotFound(Json.toJson(ErrorResource(s"Alas, image with id $id could not be found to download. If at first you don't succeed, try, try again!")))
+      )
+      case Some(found) => ss.download(found).map(filePoop => Ok(filePoop.body))
+    }
+  }
+
   /**
    * Uses a custom FilePartHandler to return a type of "File" rather than
    * using Play's TemporaryFile class.  Deletion must happen explicitly on
    * completion, rather than TemporaryFile (which uses finalization to
    * delete temporary files).
-   *
+   * Grabbed this from play sample code fyi. wanted to learn accumulator
    * @return
    */
   private def handleFilePartAsFile: FilePartHandler[File] = {
@@ -128,28 +179,6 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
     logger.info(s"size = ${size}")
     JFiles.deleteIfExists(file.toPath)
     size
-  }
-
-  def upload() = Action(parse.multipartFormData(handleFilePartAsFile)) { implicit request =>
-    request.body.file("file").map { filePart =>
-      logger.info("I AM ABOUT TO UPLOAD TO GOOGLE")
-        //TODO: handle errors here please and dont forget to delete
-        val response = ss.upload(filePart).onComplete {
-          case Success(whatever) => logger.debug(s"THE RESPONSE BITCH $whatever")
-          case Failure(e) => logger.error("Something went terrible wrong", e)
-        }
-        logger.debug(response.toString)
-      Ok(s"Felicitaciones, your file ${filePart.filename} has been uploaded!!!")
-    }.getOrElse(BadRequest(Json.toJson(ErrorResource("Dang, we are missing the file to upload"))))
-  }
-
-  def download(id: String) = Action.async { implicit request =>
-    imageResourceHandler.get(id).flatMap {
-      case None => Future.successful(
-        NotFound(Json.toJson(ErrorResource(s"Alas, image with id $id could not be found to download. If at first you don't succeed, try, try again!")))
-      )
-      case Some(found) => ss.download(found).map(filePoop => Ok(filePoop.body))
-    }
   }
 }
 

@@ -5,4 +5,5 @@ package models
  */
 trait Detectable {
   def detectionEnabled: Boolean
+  def annotations: Seq[Annotation]
 }
