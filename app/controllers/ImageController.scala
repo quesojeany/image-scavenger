@@ -12,7 +12,6 @@ import play.api.libs.streams.Accumulator
 import play.api.mvc.MultipartFormData.FilePart
 import play.api.mvc._
 import play.core.parsers.Multipart.{FileInfo, FilePartHandler}
-import services.DetectionService.DetectionResource
 import services.{DetectionService, StorageService}
 
 import java.io.File
@@ -71,6 +70,7 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
       annotatedImage <- detect(imageResource)
       newImage  <- imageResourceHandler.create(annotatedImage)
     } yield newImage
+
 
     newPossiblyEnhancedImage.map { newImage =>
       Ok(Json.toJson(newImage))
