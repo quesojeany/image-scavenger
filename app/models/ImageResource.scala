@@ -1,6 +1,8 @@
 package models
 
-import play.api.libs.json.{Json, OFormat}
+import akka.http.scaladsl.model.{ContentType, MediaType, MediaTypes}
+import persistence.{ImageData, ImageId, ImageRepository}
+import play.api.libs.json.{JsPath, JsValue, Json, OFormat, Reads, Writes}
 
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
@@ -12,10 +14,21 @@ import scala.concurrent.{ExecutionContext, Future}
  * @param path String path of image
  * @param detectionEnabled whether to turn on detection for image
  */
-case class ImageResource(id: Option[Long] = None, name: String, path: String, detectionEnabled: Boolean = false)
+case class ImageResource(id: Long = 0,
+                         name: String = "defaultPoop",
+                         storedPath: String = "defaultStoredPath",
+                         detectionEnabled: Boolean = false,
+                         annotations: Seq[Annotation] = Seq(),
+                         mediaType: String = "",
+                         fileName: String = "defaultFileNamePoop",
+                         downloadUrl: String = "thisshouldnotbeaccesibleDownloadUrl",
+                        ) extends Storable with Detectable {
+
+    //override def isMediaTypeSupported: Boolean = mediaType.isImage
+}
 
 object ImageResource {
-    implicit val imageFormat: OFormat[ImageResource] = Json.using[Json.WithDefaultValues].format[ImageResource]
+    implicit val imageFormat = Json.using[Json.WithDefaultValues].format[ImageResource]
 }
 
 /**
@@ -52,18 +65,22 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
      */
     def create (image: ImageResource): Future[ImageResource] = {
         //TODO: yuck null (do this later ExistingImage versus Image, with Existing trait maybe)
-        val id = image.id.map(thisId => ImageId(thisId))
-        val data = ImageData(null, name = image.name, path = image.path, detectionEnabled = image.detectionEnabled)
-        imageRepository.create(data).map(createImageResource)
+        //val id = image.id.map(thisId => ImageId(thisId))
+        val data = ImageData(ImageId(image.id), path = image.storedPath, name = image.name, detectionEnabled = image.detectionEnabled)
+        imageRepository.create(data).map(toImageResource)
     }
+
+    /*def update(image: ImageResource): Future[ImageResource] = {
+        imageRepository.update(data).map(toImageResource())
+    }*/
 
     def list(): Future[Seq[ImageResource]] = imageRepository.list()
       .map(imageRows => {
-        imageRows.map(createImageResource)
+        imageRows.map(toImageResource)
       })
 
     def get(id: String): Future[Option[ImageResource]] = imageRepository.findById(ImageId(id))
-      .map(imageRow => imageRow.map(createImageResource))
+      .map(imageRow => imageRow.map(toImageResource))
 
     def exists(id: String): Future[Boolean] = get(id).map(_.isDefined)
 
@@ -76,12 +93,16 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
      * @return
      */
     def remove(image: ImageResource): Future[Int] = {
-        require(image.id.isDefined) //todo; lazy way handle checking id. just throws generic IllegalArgException
-        val imageToDelete = ImageData(ImageId(image.id.get), image.name, image.path, image.detectionEnabled)
+        require(image.id != 0) //todo; lazy way handle handling id is 0 which is the shitty way of indicating
+        val imageToDelete = ImageData(ImageId(image.id), image.name, image.storedPath, image.detectionEnabled)
         imageRepository.remove(imageToDelete)
     }
 
-    private def createImageResource(data: ImageData): ImageResource =
-        ImageResource(Some(data.id.value), data.name, data.path, data.detectionEnabled)
+    // probably better way to apply and unapply these models, but for right now blargh time.
+    // todo: get rid of hardcoded media type
+    private def toImageResource(data: ImageData): ImageResource =
+        ImageResource(data.id.value, data.name, data.path, data.detectionEnabled, mediaType = "")
+
+    def toImageData(image: ImageResource) = ImageData(ImageId(image.id), image.name, image.storedPath, image.detectionEnabled)
 
 }

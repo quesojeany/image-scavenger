@@ -4,10 +4,12 @@
 
 # Home page
 # GET     /                           controllers.ImageController.index
-POST    /images                    controllers.ImageController.create
+POST    /images                    controllers.ImageController.createAndDetect()
+POST    /images/upload              controllers.ImageController.upload()
 GET     /images                    controllers.ImageController.list
 GET     /images/:id                controllers.ImageController.get(id)
 DELETE  /images/:id                controllers.ImageController.remove(id)
+GET     /images/download/:id           controllers.ImageController.download(id)
 
 
 # Map static resources from the /public folder to the /assets URL path
