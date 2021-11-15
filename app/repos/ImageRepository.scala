@@ -74,7 +74,8 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   private implicit class ImageExtensions[C[_]](q: Query[ImagesTable, ImageData, C]) {
     // specify mapping of relationship to address
-    def withAnnotations = images.joinLeft(annotations).on(_.id === _.imageId)
+    def withPossibleAnnotations = images.joinLeft(annotations).on(_.id === _.imageId)
+    def withAnnotations = images.join(annotations).on(_.id === _.imageId)
   }
 
   /**
@@ -90,7 +91,7 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   /**
    * Create an image and any possible annotations
-   * TODO: create type alias for the return type, blargh tuples
+   * TODO: use FullImageData instead.
    * This is an asynchronous operation, it will return a future of the created image, which can be used to obtain the
    * id for that image.
    */
@@ -131,9 +132,6 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
       ) ++= test
   }
 
-  //will have to be one query on the "owning side" which is the annotation
-  //two queries instead of the join (for now)
-
   /**
    * Return images with optional annotations
    *
@@ -158,34 +156,13 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
    * TODO: pagination and limits would help here.
    */
   def list(): Future[Seq[FullImageData]] = db.run {
-    images.withAnnotations.result.map { imageAnnotationRows => {
+    images.withPossibleAnnotations.result.map { imageAnnotationRows => {
       val groupedByImageData = imageAnnotationRows.groupBy(x => x._1).map {
         case (image, imageAnnotationTuples) => (image, imageAnnotationTuples.flatMap(_._2))
       }
       groupedByImageData.toSeq.map(tuple => FullImageData(tuple._1, tuple._2))
     }}
   }
-
-  /**
-   * Get image and annotation using foreign key relationship
-   * inner join
-   */
-  def listAnnotatedImages(): Future[Seq[(ImageData, AnnotationData)]] =
-    db.run {
-      (for {
-        annotation <- annotations
-        image <- annotation.image
-      } yield (image, annotation)).to[Seq].result
-    }
-
-  /**
-   * List all images with possible annotations.
-   * Some images don't have annotations
-   */
-  def listPossiblyAnnotatedImages(): Future[Seq[(ImageData, Option[AnnotationData])]] =
-    db.run {
-      images.joinLeft(annotations).on(_.id === _.imageId).to[Seq].result
-    }
 
   def remove(data: ImageData): Future[Int] = db.run {
     images.filter(_.id === data.id).delete
