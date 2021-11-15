@@ -1,15 +1,26 @@
 package models
 
-import akka.http.scaladsl.model.{ContentType, MediaType, MediaTypes}
-import repos.{ImageData, ImageId, ImageRepository}
-import play.api.libs.json.{JsPath, JsValue, Json, OFormat, Reads, Writes}
+import play.api.libs.json.Json
+import repos.{AnnotationData, ImageData, ImageId, ImageRepository}
 
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
+ * Only needed for Image, which is our main DTO here.
+ *
+ * @param id Long TODO: Gross --> I hate the way i use 0 to mean it doesnt exist, trait will be nicer than opt and zero
+ * @param name
+ * @param imageId Long TODO: ditto
+ */
+case class Annotation(id: Long = 0, name: String, imageId: Long = 0)
+object Annotation {
+    implicit val annotationFormat = Json.using[Json.WithDefaultValues].format[Annotation]
+}
+
+/**
  * DTO for displaying image information
- * @param id optional long - new cases
+ * @param id Long TODO: Gross --> I hate the way i use 0 to mean it doesnt exist, trait will be nicer than opt and zero
  * @param name String name of image
  * @param path String path of image
  * @param detectionEnabled whether to turn on detection for image
@@ -77,8 +88,16 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
 
     // probably better way to apply and unapply these models, but for right now blargh time.
     // todo: get rid of hardcoded media type
-    private def toImageResource(data: ImageData): ImageResource =
-        ImageResource(data.id.value, data.name, data.path, data.detectionEnabled, mediaType = "")
+    private def toImageResource(data: (ImageData, Seq[AnnotationData])): ImageResource = {
+        val (image: ImageData, annotationsData) = data
+        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, mediaType = "", annotations = annotationsData.map(toAnnotation))
+    }
+
+    private def toImageResource(image: ImageData): ImageResource =
+        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, mediaType = "", annotations = Seq())
+
+    private def toAnnotation(annotation: AnnotationData): Annotation =
+        Annotation(annotation.id, annotation.name, annotation.imageId.value)
 
     def toImageData(image: ImageResource) = ImageData(ImageId(image.id), image.name, image.storedPath, image.detectionEnabled)
 

@@ -23,11 +23,13 @@ object ImageId {
 }
 
 /**
- * A repository for images.
+ * A repository for images (which includes annotations table)
  *
- * TODO: If we want to support more than just images as a requirement--> this really should be generic tables, just StoredFiles, no reference to image
- * TODO: investigate transaction/session capability
- * TODO: paging/sublist incorporation
+ * Improvements:
+ * TODO 1. abstract persistence layer away from slick (may mean to stop relying on Guice/play-slick)
+ * TODO 2. If we want to support more than just images as a requirement--> this really should be generic tables, just StoredFiles, no reference to image
+ * TODO 3. investigate transaction/session capability
+ * TODO 4. paging/sublist incorporation
  *
  * @param dbConfigProvider The Play db config provider. Play will inject this for you.
  */
@@ -81,13 +83,23 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
     (id: Rep[ImageId]) => images.filter(_.id === id))
 
   /**
-   * Create an image
-   *
+   * Create an image and any possible annotations
+   * TODO: create type alias for the return type, blargh tuples
    * This is an asynchronous operation, it will return a future of the created image, which can be used to obtain the
    * id for that image.
    */
-  def create(data: ImageData): Future[ImageData] = db.run {
-    // We create a projection of the 3 columns, since we're not inserting a value for the id column
+  def create(imageData: ImageData, annotationData: Seq[AnnotationData] = Seq()): Future[(ImageData, Seq[AnnotationData])] = {
+    val insertImageThenAnnotations = for {
+      createdImage: ImageData <- insertImage(imageData)
+      createdAnnotations: Seq[AnnotationData] <- {
+        val annotationDataWithImageId = annotationData.map(data => data.copy(imageId = createdImage.id))
+        insertAnnotations(annotationDataWithImageId)
+      }
+    } yield (createdImage, createdAnnotations)
+    db.run(insertImageThenAnnotations.transactionally)
+  }
+
+  private def insertImage(imageData: ImageData) = {
     (images.map(i => (i.name, i.path, i.detectionEnabled))
       // Now define it to return the id, because we want to know what id was generated for the person
       returning images.map(_.id)
@@ -95,7 +107,22 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
       // returned id
       into ((namePathDetectionEnabled, id) => ImageData(id, namePathDetectionEnabled._1, namePathDetectionEnabled._2, namePathDetectionEnabled._3))
       // And finally, insert the image into the database
-      ) += (data.name, data.path, data.detectionEnabled)
+      ) += (imageData.name, imageData.path, imageData.detectionEnabled)
+  }
+
+  private def insertAnnotations(annotationData: Seq[AnnotationData]) = {
+    val test = annotationData.map(poop => {
+      (poop.name, poop.imageId)
+    })
+
+    (annotations.map(a => (a.name, a.imageId))
+      // Now define it to return the id, because we want to know what id was generated for the person
+      returning annotations.map(_.id)
+      // And we define a transformation for the returned value, which combines our original parameters with the
+      // returned id
+      into ((nameImageId, id) => AnnotationData(id, nameImageId._1, nameImageId._2))
+      // And finally, insert the annotations into the database
+      ) ++= test
   }
 
   def findById(id: ImageId): Future[Option[ImageData]] = db.run {
@@ -109,33 +136,6 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   def list(): Future[Seq[ImageData]] = db.run {
     images.result
   }
-
-  def remove(data: ImageData): Future[Int] = db.run {
-    images.filter(_.id === data.id).delete
-  }
-
-  def remove(id: ImageId): Future[Int] = db.run {
-    queryById(id).delete
-  }
-
-  /******************** Annotations "Repository" TODO: rip this out to its own home *********************/
-
-  private class AnnotationsTable(tag: Tag) extends Table[AnnotationData](tag, "annotations")  {
-
-    /** The ID column, which is the primary key, and auto incremented */
-    def id: Rep[Long] = column[Long]("id", O.PrimaryKey, O.AutoInc)
-
-    /** The name column */
-    def name: Rep[String] = column[String]("name")
-
-    def imageId: Rep[ImageId] = column[ImageId]("imageId")
-
-    def image = foreignKey("FK_IMAGES", imageId, TableQuery[ImagesTable])(_.id, onDelete = ForeignKeyAction.Cascade)
-
-    def * = (id, name, imageId) <> ((AnnotationData.apply _).tupled, AnnotationData.unapply)
-  }
-
-  private val annotations = TableQuery[AnnotationsTable]
 
   /**
    * Get image and annotation using foreign key relationship
@@ -157,4 +157,31 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
     db.run {
       images.joinLeft(annotations).on(_.id === _.imageId).to[Seq].result
     }
+
+  def remove(data: ImageData): Future[Int] = db.run {
+    images.filter(_.id === data.id).delete
+  }
+
+  def remove(id: ImageId): Future[Int] = db.run {
+    queryById(id).delete
+  }
+
+  /******************** Annotations Section TODO: rip this out to its own repo home *********************/
+
+  private class AnnotationsTable(tag: Tag) extends Table[AnnotationData](tag, "annotations")  {
+
+    /** The ID column, which is the primary key, and auto incremented */
+    def id: Rep[Long] = column[Long]("id", O.PrimaryKey, O.AutoInc)
+
+    /** The name column */
+    def name: Rep[String] = column[String]("name")
+
+    def imageId: Rep[ImageId] = column[ImageId]("imageId")
+
+    def image = foreignKey("FK_IMAGES", imageId, TableQuery[ImagesTable])(_.id, onDelete = ForeignKeyAction.Cascade)
+
+    def * = (id, name, imageId) <> ((AnnotationData.apply _).tupled, AnnotationData.unapply)
+  }
+
+  private val annotations = TableQuery[AnnotationsTable]
 }
