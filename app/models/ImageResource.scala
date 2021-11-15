@@ -63,10 +63,15 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
         imageRepository.create(imageData, annotationsData).map(toImageResource)
     }
 
-    def list(): Future[Seq[ImageResource]] = imageRepository.list()
-      .map(imageRows => {
-        imageRows.map(toImageResource)
-      })
+    def list(name: Option[String] = None): Future[Seq[ImageResource]] = {
+        val fullData = name.map(n => {
+            imageRepository.findByAnnotation(AnnotationData(0, n, null)) //todo: 0, null barf!
+        }).getOrElse(imageRepository.list())
+
+        fullData.map(imageRows => {
+            imageRows.map(toImageResource)
+        })
+    }
 
     def get(id: String): Future[Option[ImageResource]] = imageRepository.findById(ImageId(id))
       .map(imageRow => imageRow.map(toImageResource))
@@ -82,15 +87,16 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
      * @return
      */
     def remove(image: ImageResource): Future[Int] = {
-        require(image.id != 0) //todo; lazy way handle handling id is 0 which is the shitty way of indicating
+        require(image.id != 0) //todo; lazy way handle handling id is 0 which is the shitty way of indicating existence
         val imageToDelete = ImageData(ImageId(image.id), image.name, image.storedPath, image.detectionEnabled)
         imageRepository.remove(imageToDelete)
     }
-    // probably better way to apply and unapply these models, but for right now blargh time.
-    // todo: get rid of hardcoded media type
+
+    /*  Transform methods: more concise way to apply and unapply these models, but for right now blargh time.
+     */
     private def toImageResource(data: (ImageData, Seq[AnnotationData])): ImageResource = {
         val (image: ImageData, annotationsData) = data
-        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, mediaType = "", annotations = annotationsData.map(toAnnotation))
+        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, annotations = annotationsData.map(toAnnotation))
     }
 
     private def toImageResource(fullData: FullImageData): ImageResource = {
@@ -99,6 +105,7 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
         ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, annotations = annotations.map(toAnnotation))
     }
 
+    // Learning/Reminder: keeping this here as a reminder why this DTO transfer logic was a godsend when refactoring to FullDataImage
     private def toImageResource(image: ImageData): ImageResource =
         ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, annotations = Seq())
 

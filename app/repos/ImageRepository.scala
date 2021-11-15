@@ -1,5 +1,6 @@
 package repos
 
+import play.api.Logger
 import play.api.db.slick.DatabaseConfigProvider
 import slick.jdbc.JdbcProfile
 import slick.lifted.MappedTo
@@ -7,8 +8,6 @@ import slick.lifted.MappedTo
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
-//todo: we should probably use UUID for uniqueness in a potential replicated environment
-//todo: use optionals or the Exists trait to have types that better express whether something is persisted.
 final case class ImageData(id: ImageId, name: String, path: String, detectionEnabled: Boolean = false)
 final case class AnnotationData(id: Long, name: String, imageId: ImageId)
 final case class FullImageData(imageData: ImageData, annotationData: Seq[AnnotationData] = Seq())
@@ -29,8 +28,15 @@ object ImageId {
  * Improvements:
  * TODO 1. abstract persistence layer away from slick (may mean to stop relying on Guice/play-slick)
  * TODO 2. If we want to support more than just images as a requirement--> this really should be generic tables, just StoredFiles, no reference to image
- * TODO 3. investigate transaction/session capability
- * TODO 4. paging/sublist incorporation
+ * TODO 3. sublist def --> start, limit
+ * TODO 4. count def
+ * TODO 5. remove is broken
+ * TODO 6: best practice to use UUID when replication is involved (ensure universal unique identifier)
+ * TODO 7: Shame! Its littered throughout code outside of this repo, but I'd like to use a Trait that indicates
+ * whether a repo model is peristed or not rather than the lazy code smell identity value of 0
+ *
+ * Helpful hint: Wanna see generated sql queries? Sure? OK, then!
+ * set logging level to debug and search for "Compiled server-side to" in console
  *
  * @param dbConfigProvider The Play db config provider. Play will inject this for you.
  */
@@ -43,6 +49,8 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   // The second one brings the Slick DSL into scope, which lets you define the table and other queries.
   import dbConfig._
   import profile.api._
+
+  private val logger = Logger(getClass)
 
   /**
    * Images Table
@@ -74,7 +82,17 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   private implicit class ImageExtensions[C[_]](q: Query[ImagesTable, ImageData, C]) {
     // specify mapping of relationship to address
-    def withAnnotations = images.joinLeft(annotations).on(_.id === _.imageId)
+    def withPossibleAnnotations =
+      images.joinLeft(annotations).on(_.id === _.imageId)
+
+    //todo: this filter probably should go in an AnnotationExtensions class
+    def filterAnnotationsByName(name: String) =
+      annotations.filter(a => a.name.toLowerCase === name.toLowerCase)
+
+    def withAnnotations(name: String) =
+      images.join(filterAnnotationsByName(name)).on(_.id === _.imageId)
+
+    def withAnnotations = images.join(annotations).on(_.id === _.imageId)
   }
 
   /**
@@ -90,7 +108,7 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   /**
    * Create an image and any possible annotations
-   * TODO: create type alias for the return type, blargh tuples
+   * TODO: use FullImageData instead.
    * This is an asynchronous operation, it will return a future of the created image, which can be used to obtain the
    * id for that image.
    */
@@ -131,9 +149,6 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
       ) ++= test
   }
 
-  //will have to be one query on the "owning side" which is the annotation
-  //two queries instead of the join (for now)
-
   /**
    * Return images with optional annotations
    *
@@ -154,11 +169,11 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   /**
    * List all possibly annotated images in the database.
-   * One query with a left join! (debug logging you can see generated query "Compiled server-side to")
-   * TODO: pagination and limits would help here.
+   * One query with a left join!
    */
   def list(): Future[Seq[FullImageData]] = db.run {
-    images.withAnnotations.result.map { imageAnnotationRows => {
+    logger.debug("MEGAVERSE(yuck, farcebook): Unfiltered mega-universe of images and their possible annotations")
+    images.withPossibleAnnotations.result.map { imageAnnotationRows => {
       val groupedByImageData = imageAnnotationRows.groupBy(x => x._1).map {
         case (image, imageAnnotationTuples) => (image, imageAnnotationTuples.flatMap(_._2))
       }
@@ -166,26 +181,16 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
     }}
   }
 
-  /**
-   * Get image and annotation using foreign key relationship
-   * inner join
-   */
-  def listAnnotatedImages(): Future[Seq[(ImageData, AnnotationData)]] =
-    db.run {
-      (for {
-        annotation <- annotations
-        image <- annotation.image
-      } yield (image, annotation)).to[Seq].result
-    }
+  def findByAnnotation(data: AnnotationData): Future[Seq[FullImageData]] = db.run {
+    logger.debug("FilteredVerse: by name, i hope we find something!")
 
-  /**
-   * List all images with possible annotations.
-   * Some images don't have annotations
-   */
-  def listPossiblyAnnotatedImages(): Future[Seq[(ImageData, Option[AnnotationData])]] =
-    db.run {
-      images.joinLeft(annotations).on(_.id === _.imageId).to[Seq].result
-    }
+    images.withAnnotations(data.name).result.map { imageAnnotationRows => {
+      val groupedByImageData = imageAnnotationRows.groupBy(x => x._1).map {
+        case (image, imageAnnotationTuples) => (image, imageAnnotationTuples.map(_._2))
+      }
+      groupedByImageData.toSeq.map(tuple => FullImageData(tuple._1, tuple._2))
+    }}
+  }
 
   def remove(data: ImageData): Future[Int] = db.run {
     images.filter(_.id === data.id).delete
