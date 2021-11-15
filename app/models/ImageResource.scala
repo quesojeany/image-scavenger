@@ -1,15 +1,26 @@
 package models
 
-import akka.http.scaladsl.model.{ContentType, MediaType, MediaTypes}
-import persistence.{ImageData, ImageId, ImageRepository}
-import play.api.libs.json.{JsPath, JsValue, Json, OFormat, Reads, Writes}
+import play.api.libs.json.Json
+import repos.{AnnotationData, ImageData, ImageId, ImageRepository}
 
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
+ * Only needed for Image, which is our main DTO here.
+ *
+ * @param id Long TODO: Gross --> I hate the way i use 0 to mean it doesnt exist, trait will be nicer than opt and zero
+ * @param name
+ * @param imageId Long TODO: ditto
+ */
+case class Annotation(id: Long = 0, name: String, imageId: Long = 0)
+object Annotation {
+    implicit val annotationFormat = Json.using[Json.WithDefaultValues].format[Annotation]
+}
+
+/**
  * DTO for displaying image information
- * @param id optional long - new cases
+ * @param id Long TODO: Gross --> I hate the way i use 0 to mean it doesnt exist, trait will be nicer than opt and zero
  * @param name String name of image
  * @param path String path of image
  * @param detectionEnabled whether to turn on detection for image
@@ -38,25 +49,6 @@ object ImageResource {
  */
 class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit ec: ExecutionContext) {
 
-    /*def create(postInput: PostFormInput)(
-      implicit mc: MarkerContext): Future[PostResource] = {
-        val data = PostData(PostId("999"), postInput.title, postInput.body)
-        // We don't actually create the post, so return what we have
-        postRepository.create(data).map { id =>
-            createPostResource(data)
-        }
-    }*/
-
-    /*def lookup(id: String)(
-      implicit mc: MarkerContext): Future[Option[PostResource]] = {
-        val postFuture = postRepository.get(PostId(id))
-        postFuture.map { maybePostData =>
-            maybePostData.map { postData =>
-                createPostResource(postData)
-            }
-        }
-    }*/
-
     /**
      * Create an image
      * TODO: error handling with Form
@@ -66,13 +58,10 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
     def create (image: ImageResource): Future[ImageResource] = {
         //TODO: yuck null (do this later ExistingImage versus Image, with Existing trait maybe)
         //val id = image.id.map(thisId => ImageId(thisId))
-        val data = ImageData(ImageId(image.id), path = image.storedPath, name = image.name, detectionEnabled = image.detectionEnabled)
-        imageRepository.create(data).map(toImageResource)
+        val imageData = ImageData(ImageId(image.id), path = image.storedPath, name = image.name, detectionEnabled = image.detectionEnabled)
+        val annotationsData = image.annotations.map(a => AnnotationData(a.id, a.name, ImageId(a.imageId)))
+        imageRepository.create(imageData, annotationsData).map(toImageResource)
     }
-
-    /*def update(image: ImageResource): Future[ImageResource] = {
-        imageRepository.update(data).map(toImageResource())
-    }*/
 
     def list(): Future[Seq[ImageResource]] = imageRepository.list()
       .map(imageRows => {
@@ -100,9 +89,15 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
 
     // probably better way to apply and unapply these models, but for right now blargh time.
     // todo: get rid of hardcoded media type
-    private def toImageResource(data: ImageData): ImageResource =
-        ImageResource(data.id.value, data.name, data.path, data.detectionEnabled, mediaType = "")
+    private def toImageResource(data: (ImageData, Seq[AnnotationData])): ImageResource = {
+        val (image: ImageData, annotationsData) = data
+        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, mediaType = "", annotations = annotationsData.map(toAnnotation))
+    }
 
-    def toImageData(image: ImageResource) = ImageData(ImageId(image.id), image.name, image.storedPath, image.detectionEnabled)
+    private def toImageResource(image: ImageData): ImageResource =
+        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, mediaType = "", annotations = Seq())
+
+    private def toAnnotation(annotation: AnnotationData): Annotation =
+        Annotation(annotation.id, annotation.name, annotation.imageId.value)
 
 }

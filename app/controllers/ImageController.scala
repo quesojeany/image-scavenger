@@ -87,7 +87,9 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
     .filter(_ == true)
     .map(_ => {
       ds.detect(image).map(detectionResults => {
-        image.copy(annotations = detectionResults.annotations)
+        val annotationsToSave = detectionResults.annotations.map(a => Annotation(name = a.name))
+        logger.debug(s"Arrrggh!!, found us some golden treasure ${annotationsToSave.size}")
+        image.copy(annotations = annotationsToSave)
       })
     }).getOrElse(Future.successful(image))
 

@@ -2,12 +2,12 @@ package services
 
 import akka.http.scaladsl.model.MediaTypes
 import com.google.inject.ImplementedBy
-import models.{Annotation, Detectable, Storable}
+import models.{Detectable, Storable}
 import play.api.Logger
 import play.api.libs.json.{JsObject, Json}
 import play.api.libs.ws.WSClient
-import services.DetectionService.DetectionResource
-import services.GoogleDetectionService.{BoundingPoly, GoogleDetectionResponse, LocalizedObjectAnnotations, NormalizedVertices, Responses, logger}
+import services.DetectionService.{Annotation, DetectionResource}
+import services.GoogleDetectionService.{GoogleDetectionResponse, Responses, logger}
 
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration.{Duration, DurationInt}
@@ -15,6 +15,10 @@ import scala.concurrent.{ExecutionContext, Future}
 
 object DetectionService {
   case class DetectionResource(annotations: Seq[Annotation])
+  case class Annotation(name: String)
+  object Annotation {
+    implicit val annotationFormat = Json.using[Json.WithDefaultValues].format[Annotation]
+  }
 }
 
 /**
