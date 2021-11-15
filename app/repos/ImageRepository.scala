@@ -28,8 +28,8 @@ object ImageId {
  * Improvements:
  * TODO 1. abstract persistence layer away from slick (may mean to stop relying on Guice/play-slick)
  * TODO 2. If we want to support more than just images as a requirement--> this really should be generic tables, just StoredFiles, no reference to image
- * TODO 3. paging/sublist incorporation
- * TODO 4. count
+ * TODO 3. sublist def --> start, limit
+ * TODO 4. count def
  * TODO 5. remove is broken
  * TODO 6: best practice to use UUID when replication is involved (ensure universal unique identifier)
  * TODO 7: Shame! Its littered throughout code outside of this repo, but I'd like to use a Trait that indicates
@@ -169,14 +169,9 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   /**
    * List all possibly annotated images in the database.
-   * One query with a left join! (debug logging you can see generated query "Compiled server-side to")
-   * If a name is provided will only return images with that annotation name.
-   * TODO: pagination and limits would help here.
+   * One query with a left join!
    */
-  def list(name: Option[String] = None): Future[Seq[FullImageData]] =
-    name.map(filteredListByAnnotationName).getOrElse(listWithPossibleAnnotations)
-
-  private def listWithPossibleAnnotations: Future[Seq[FullImageData]] = db.run {
+  def list(): Future[Seq[FullImageData]] = db.run {
     logger.debug("MEGAVERSE(yuck, farcebook): Unfiltered mega-universe of images and their possible annotations")
     images.withPossibleAnnotations.result.map { imageAnnotationRows => {
       val groupedByImageData = imageAnnotationRows.groupBy(x => x._1).map {
@@ -186,11 +181,10 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
     }}
   }
 
-  //TODO: use annotationdata obj
-  private def filteredListByAnnotationName(name: String): Future[Seq[FullImageData]] = db.run {
+  def findByAnnotation(data: AnnotationData): Future[Seq[FullImageData]] = db.run {
     logger.debug("FilteredVerse: by name, i hope we find something!")
 
-    images.withAnnotations(name).result.map { imageAnnotationRows => {
+    images.withAnnotations(data.name).result.map { imageAnnotationRows => {
       val groupedByImageData = imageAnnotationRows.groupBy(x => x._1).map {
         case (image, imageAnnotationTuples) => (image, imageAnnotationTuples.map(_._2))
       }

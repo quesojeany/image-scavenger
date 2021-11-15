@@ -63,10 +63,15 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
         imageRepository.create(imageData, annotationsData).map(toImageResource)
     }
 
-    def list(name: Option[String] = None): Future[Seq[ImageResource]] = imageRepository.list(name)
-      .map(imageRows => {
-        imageRows.map(toImageResource)
-      })
+    def list(name: Option[String] = None): Future[Seq[ImageResource]] = {
+        val fullData = name.map(n => {
+            imageRepository.findByAnnotation(AnnotationData(0, n, null)) //todo: 0, null barf!
+        }).getOrElse(imageRepository.list())
+
+        fullData.map(imageRows => {
+            imageRows.map(toImageResource)
+        })
+    }
 
     def get(id: String): Future[Option[ImageResource]] = imageRepository.findById(ImageId(id))
       .map(imageRow => imageRow.map(toImageResource))
