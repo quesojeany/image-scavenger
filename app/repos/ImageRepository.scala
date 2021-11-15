@@ -1,4 +1,4 @@
-package persistence
+package repos
 
 import play.api.db.slick.DatabaseConfigProvider
 import slick.jdbc.JdbcProfile
@@ -9,7 +9,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 //todo: we should probably use UUID for uniqueness in a potential replicated environment
 final case class ImageData(id: ImageId, name: String, path: String, detectionEnabled: Boolean = false)
-
+final case class AnnotationData(id: Long, name: String, imageId: ImageId)
 
 case class ImageId(value: Long) extends MappedTo[Long] {
   override def toString: String = value.toString
@@ -22,10 +22,12 @@ object ImageId {
   }
 }
 
-
 /**
  * A repository for images.
+ *
+ * TODO: If we want to support more than just images as a requirement--> this really should be generic tables, just StoredFiles, no reference to image
  * TODO: investigate transaction/session capability
+ * TODO: paging/sublist incorporation
  *
  * @param dbConfigProvider The Play db config provider. Play will inject this for you.
  */
@@ -40,7 +42,7 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   import profile.api._
 
   /**
-   * Here we define the table. It will have a name of images
+   * Images Table
    */
   private class ImagesTable(tag: Tag) extends Table[ImageData](tag, "images") {
 
@@ -92,8 +94,8 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
       // And we define a transformation for the returned value, which combines our original parameters with the
       // returned id
       into ((namePathDetectionEnabled, id) => ImageData(id, namePathDetectionEnabled._1, namePathDetectionEnabled._2, namePathDetectionEnabled._3))
-    // And finally, insert the person into the database
-    ) += (data.name, data.path, data.detectionEnabled)
+      // And finally, insert the image into the database
+      ) += (data.name, data.path, data.detectionEnabled)
   }
 
   def findById(id: ImageId): Future[Option[ImageData]] = db.run {
@@ -102,6 +104,7 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   /**
    * List all the images in the database.
+   * TODO: lets figure out how to join with annotations blargh.
    */
   def list(): Future[Seq[ImageData]] = db.run {
     images.result
@@ -114,4 +117,44 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   def remove(id: ImageId): Future[Int] = db.run {
     queryById(id).delete
   }
+
+  /******************** Annotations "Repository" TODO: rip this out to its own home *********************/
+
+  private class AnnotationsTable(tag: Tag) extends Table[AnnotationData](tag, "annotations")  {
+
+    /** The ID column, which is the primary key, and auto incremented */
+    def id: Rep[Long] = column[Long]("id", O.PrimaryKey, O.AutoInc)
+
+    /** The name column */
+    def name: Rep[String] = column[String]("name")
+
+    def imageId: Rep[ImageId] = column[ImageId]("imageId")
+
+    def image = foreignKey("FK_IMAGES", imageId, TableQuery[ImagesTable])(_.id, onDelete = ForeignKeyAction.Cascade)
+
+    def * = (id, name, imageId) <> ((AnnotationData.apply _).tupled, AnnotationData.unapply)
+  }
+
+  private val annotations = TableQuery[AnnotationsTable]
+
+  /**
+   * Get image and annotation using foreign key relationship
+   * inner join
+   */
+  def listAnnotatedImages(): Future[Seq[(ImageData, AnnotationData)]] =
+    db.run {
+      (for {
+        annotation <- annotations
+        image <- annotation.image
+      } yield (image, annotation)).to[Seq].result
+    }
+
+  /**
+   * List all images with possible annotations.
+   * Some images don't have annotations
+   */
+  def listPossiblyAnnotatedImages(): Future[Seq[(ImageData, Option[AnnotationData])]] =
+    db.run {
+      images.joinLeft(annotations).on(_.id === _.imageId).to[Seq].result
+    }
 }

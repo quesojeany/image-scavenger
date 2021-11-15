@@ -1,7 +1,7 @@
 package models
 
 import akka.http.scaladsl.model.{ContentType, MediaType, MediaTypes}
-import persistence.{ImageData, ImageId, ImageRepository}
+import repos.{ImageData, ImageId, ImageRepository}
 import play.api.libs.json.{JsPath, JsValue, Json, OFormat, Reads, Writes}
 
 import javax.inject.Inject
@@ -38,25 +38,6 @@ object ImageResource {
  */
 class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit ec: ExecutionContext) {
 
-    /*def create(postInput: PostFormInput)(
-      implicit mc: MarkerContext): Future[PostResource] = {
-        val data = PostData(PostId("999"), postInput.title, postInput.body)
-        // We don't actually create the post, so return what we have
-        postRepository.create(data).map { id =>
-            createPostResource(data)
-        }
-    }*/
-
-    /*def lookup(id: String)(
-      implicit mc: MarkerContext): Future[Option[PostResource]] = {
-        val postFuture = postRepository.get(PostId(id))
-        postFuture.map { maybePostData =>
-            maybePostData.map { postData =>
-                createPostResource(postData)
-            }
-        }
-    }*/
-
     /**
      * Create an image
      * TODO: error handling with Form
@@ -69,10 +50,6 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
         val data = ImageData(ImageId(image.id), path = image.storedPath, name = image.name, detectionEnabled = image.detectionEnabled)
         imageRepository.create(data).map(toImageResource)
     }
-
-    /*def update(image: ImageResource): Future[ImageResource] = {
-        imageRepository.update(data).map(toImageResource())
-    }*/
 
     def list(): Future[Seq[ImageResource]] = imageRepository.list()
       .map(imageRows => {
