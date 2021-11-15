@@ -95,13 +95,17 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
       })
     }).getOrElse(Future.successful(image))
 
+
   /**
-   * A REST endpoint that gets all the images as JSON.
+   * A REST endpoint that gets all the images as JSON or if an annotation name is provided
+   * then will only returns those images that have that annotation.
    * If none, returns empty json array.
-   * TODO: implement search by annotation (;
+   *
+   * @param name filtered images by annotation name (case insensitive)
+   * @return
    */
   def list(name: Option[String] = None) = Action.async { implicit request =>
-    imageResourceHandler.list().map { images =>
+    imageResourceHandler.list(name).map { images =>
       Ok(Json.toJson(images))
     }
   }

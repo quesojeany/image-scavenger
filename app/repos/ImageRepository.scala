@@ -1,5 +1,6 @@
 package repos
 
+import play.api.Logger
 import play.api.db.slick.DatabaseConfigProvider
 import slick.jdbc.JdbcProfile
 import slick.lifted.MappedTo
@@ -29,8 +30,12 @@ object ImageId {
  * Improvements:
  * TODO 1. abstract persistence layer away from slick (may mean to stop relying on Guice/play-slick)
  * TODO 2. If we want to support more than just images as a requirement--> this really should be generic tables, just StoredFiles, no reference to image
- * TODO 3. investigate transaction/session capability
- * TODO 4. paging/sublist incorporation
+ * TODO 3. paging/sublist incorporation
+ * TODO 4. count
+ * TODO 5. remove is broken
+ *
+ * Helpful hint: Wanna see generated sql queries? Sure? OK, then!
+ * set logging level to debug and search for "Compiled server-side to" in console
  *
  * @param dbConfigProvider The Play db config provider. Play will inject this for you.
  */
@@ -43,6 +48,8 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   // The second one brings the Slick DSL into scope, which lets you define the table and other queries.
   import dbConfig._
   import profile.api._
+
+  private val logger = Logger(getClass)
 
   /**
    * Images Table
@@ -76,6 +83,10 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
     // specify mapping of relationship to address
     def withPossibleAnnotations = images.joinLeft(annotations).on(_.id === _.imageId)
     def withAnnotations = images.join(annotations).on(_.id === _.imageId)
+
+    //todo: this filter probably should go in an AnnotationExtensions class
+    def filterAnnotationsByName(name: String) = annotations.filter(a => a.name.toLowerCase === name.toLowerCase)
+    def withAnnotations(name: String) = images.join(filterAnnotationsByName(name)).on(_.id === _.imageId)
   }
 
   /**
@@ -153,12 +164,29 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   /**
    * List all possibly annotated images in the database.
    * One query with a left join! (debug logging you can see generated query "Compiled server-side to")
+   * If a name is provided will only return images with that annotation name.
    * TODO: pagination and limits would help here.
    */
-  def list(): Future[Seq[FullImageData]] = db.run {
+  def list(name: Option[String] = None): Future[Seq[FullImageData]] =
+    name.map(filteredListByAnnotationName).getOrElse(listWithPossibleAnnotations)
+
+  private def listWithPossibleAnnotations: Future[Seq[FullImageData]] = db.run {
+    logger.debug("MEGAVERSE(yuck, farcebook): Unfiltered mega-universe of images and their possible annotations")
     images.withPossibleAnnotations.result.map { imageAnnotationRows => {
       val groupedByImageData = imageAnnotationRows.groupBy(x => x._1).map {
         case (image, imageAnnotationTuples) => (image, imageAnnotationTuples.flatMap(_._2))
+      }
+      groupedByImageData.toSeq.map(tuple => FullImageData(tuple._1, tuple._2))
+    }}
+  }
+
+  //TODO: use annotationdata obj
+  private def filteredListByAnnotationName(name: String): Future[Seq[FullImageData]] = db.run {
+    logger.debug("FilteredVerse: by name, i hope we find something!")
+
+    images.withAnnotations(name).result.map { imageAnnotationRows => {
+      val groupedByImageData = imageAnnotationRows.groupBy(x => x._1).map {
+        case (image, imageAnnotationTuples) => (image, imageAnnotationTuples.map(_._2))
       }
       groupedByImageData.toSeq.map(tuple => FullImageData(tuple._1, tuple._2))
     }}
