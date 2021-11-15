@@ -6,7 +6,7 @@
 # GET     /                           controllers.ImageController.index
 POST    /images                    controllers.ImageController.createAndDetect()
 POST    /images/upload              controllers.ImageController.upload()
-GET     /images                    controllers.ImageController.list
+GET     /images                    controllers.ImageController.list(name: Option[String])
 GET     /images/:id                controllers.ImageController.get(id)
 DELETE  /images/:id                controllers.ImageController.remove(id)
 GET     /images/download/:id           controllers.ImageController.download(id)

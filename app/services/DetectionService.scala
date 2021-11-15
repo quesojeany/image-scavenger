@@ -3,7 +3,7 @@ package services
 import akka.http.scaladsl.model.MediaTypes
 import com.google.inject.ImplementedBy
 import models.{Detectable, Storable}
-import play.api.Logger
+import play.api.{Configuration, Logger}
 import play.api.libs.json.{JsObject, Json}
 import play.api.libs.ws.WSClient
 import services.DetectionService.{Annotation, DetectionResource}
@@ -33,7 +33,7 @@ object DetectionService {
  *  TODO: Caching, more logging, of course unit testing with mocks.
  */
 @ImplementedBy(classOf[GoogleDetectionService])
-abstract class DetectionService(ws: WSClient)(implicit ec: ExecutionContext) {
+abstract class DetectionService(ws: WSClient, config: Configuration)(implicit ec: ExecutionContext) {
   protected def targetUrl: String
   protected def requestTimeout: Duration
   protected def limit: Int
@@ -90,12 +90,11 @@ object GoogleDetectionService {
  *           be better practice to provide our own, named and what not, but for another time.
  */
 @Singleton
-class GoogleDetectionService @Inject() (ws: WSClient)(implicit ec: ExecutionContext) extends DetectionService(ws) {
+class GoogleDetectionService @Inject() (ws: WSClient, config: Configuration)(implicit ec: ExecutionContext) extends DetectionService(ws, config) {
   protected val requestTimeout = 5000.millis
   protected val limit = 10
   protected val targetUrl = "https://vision.googleapis.com/v1/images:annotate"
-  //TODO: BAD!!! Naughty security violation, hardcoding apikey --> use Configuration and encode
-  private val apiKey = "AIzaSyAqUj5ckT1Dr8hQKJma3AcukbeR0Qq19Rc"
+  private val apiKey = config.get[String]("googlevision.apiKey")
 
   private lazy val request = ws.url(targetUrl)
     .addQueryStringParameters("key" -> apiKey)

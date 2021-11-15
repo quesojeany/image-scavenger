@@ -1,7 +1,7 @@
 package models
 
 import play.api.libs.json.Json
-import repos.{AnnotationData, ImageData, ImageId, ImageRepository}
+import repos.{AnnotationData, FullImageData, ImageData, ImageId, ImageRepository}
 
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
@@ -86,7 +86,6 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
         val imageToDelete = ImageData(ImageId(image.id), image.name, image.storedPath, image.detectionEnabled)
         imageRepository.remove(imageToDelete)
     }
-
     // probably better way to apply and unapply these models, but for right now blargh time.
     // todo: get rid of hardcoded media type
     private def toImageResource(data: (ImageData, Seq[AnnotationData])): ImageResource = {
@@ -94,8 +93,14 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
         ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, mediaType = "", annotations = annotationsData.map(toAnnotation))
     }
 
+    private def toImageResource(fullData: FullImageData): ImageResource = {
+        val image = fullData.imageData
+        val annotations = fullData.annotationData
+        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, annotations = annotations.map(toAnnotation))
+    }
+
     private def toImageResource(image: ImageData): ImageResource =
-        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, mediaType = "", annotations = Seq())
+        ImageResource(image.id.value, image.name, image.path, image.detectionEnabled, annotations = Seq())
 
     private def toAnnotation(annotation: AnnotationData): Annotation =
         Annotation(annotation.id, annotation.name, annotation.imageId.value)
