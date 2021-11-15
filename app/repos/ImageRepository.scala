@@ -8,8 +8,6 @@ import slick.lifted.MappedTo
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
-//todo: we should probably use UUID for uniqueness in a potential replicated environment
-//todo: use optionals or the Exists trait to have types that better express whether something is persisted.
 final case class ImageData(id: ImageId, name: String, path: String, detectionEnabled: Boolean = false)
 final case class AnnotationData(id: Long, name: String, imageId: ImageId)
 final case class FullImageData(imageData: ImageData, annotationData: Seq[AnnotationData] = Seq())
@@ -33,6 +31,9 @@ object ImageId {
  * TODO 3. paging/sublist incorporation
  * TODO 4. count
  * TODO 5. remove is broken
+ * TODO 6: best practice to use UUID when replication is involved (ensure universal unique identifier)
+ * TODO 7: Shame! Its littered throughout code outside of this repo, but I'd like to use a Trait that indicates
+ * whether a repo model is peristed or not rather than the lazy code smell identity value of 0
  *
  * Helpful hint: Wanna see generated sql queries? Sure? OK, then!
  * set logging level to debug and search for "Compiled server-side to" in console
@@ -81,12 +82,17 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   private implicit class ImageExtensions[C[_]](q: Query[ImagesTable, ImageData, C]) {
     // specify mapping of relationship to address
-    def withPossibleAnnotations = images.joinLeft(annotations).on(_.id === _.imageId)
-    def withAnnotations = images.join(annotations).on(_.id === _.imageId)
+    def withPossibleAnnotations =
+      images.joinLeft(annotations).on(_.id === _.imageId)
 
     //todo: this filter probably should go in an AnnotationExtensions class
-    def filterAnnotationsByName(name: String) = annotations.filter(a => a.name.toLowerCase === name.toLowerCase)
-    def withAnnotations(name: String) = images.join(filterAnnotationsByName(name)).on(_.id === _.imageId)
+    def filterAnnotationsByName(name: String) =
+      annotations.filter(a => a.name.toLowerCase === name.toLowerCase)
+
+    def withAnnotations(name: String) =
+      images.join(filterAnnotationsByName(name)).on(_.id === _.imageId)
+
+    def withAnnotations = images.join(annotations).on(_.id === _.imageId)
   }
 
   /**
