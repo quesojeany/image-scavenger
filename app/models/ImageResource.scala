@@ -58,8 +58,9 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
     def create (image: ImageResource): Future[ImageResource] = {
         //TODO: yuck null (do this later ExistingImage versus Image, with Existing trait maybe)
         //val id = image.id.map(thisId => ImageId(thisId))
-        val data = ImageData(ImageId(image.id), path = image.storedPath, name = image.name, detectionEnabled = image.detectionEnabled)
-        imageRepository.create(data).map(toImageResource)
+        val imageData = ImageData(ImageId(image.id), path = image.storedPath, name = image.name, detectionEnabled = image.detectionEnabled)
+        val annotationsData = image.annotations.map(a => AnnotationData(a.id, a.name, ImageId(a.imageId)))
+        imageRepository.create(imageData, annotationsData).map(toImageResource)
     }
 
     def list(): Future[Seq[ImageResource]] = imageRepository.list()
@@ -98,7 +99,5 @@ class ImageResourceHandler @Inject()(imageRepository: ImageRepository)(implicit 
 
     private def toAnnotation(annotation: AnnotationData): Annotation =
         Annotation(annotation.id, annotation.name, annotation.imageId.value)
-
-    def toImageData(image: ImageResource) = ImageData(ImageId(image.id), image.name, image.storedPath, image.detectionEnabled)
 
 }
