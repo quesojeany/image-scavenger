@@ -8,9 +8,10 @@ import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
 //todo: we should probably use UUID for uniqueness in a potential replicated environment
+//todo: use optionals or the Exists trait to have types that better express whether something is persisted.
 final case class ImageData(id: ImageId, name: String, path: String, detectionEnabled: Boolean = false)
 final case class AnnotationData(id: Long, name: String, imageId: ImageId)
-
+final case class FullImageData(imageData: ImageData, annotationData: Seq[AnnotationData] = Seq())
 case class ImageId(value: Long) extends MappedTo[Long] {
   override def toString: String = value.toString
 }
@@ -71,6 +72,11 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
     def * = (id, name, path, detectionEnabled) <> ((ImageData.apply _).tupled, ImageData.unapply)
   }
 
+  private implicit class ImageExtensions[C[_]](q: Query[ImagesTable, ImageData, C]) {
+    // specify mapping of relationship to address
+    def withAnnotations = images.joinLeft(annotations).on(_.id === _.imageId)
+  }
+
   /**
    * The starting point for all queries on the images table.
    */
@@ -125,16 +131,39 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
       ) ++= test
   }
 
-  def findById(id: ImageId): Future[Option[ImageData]] = db.run {
-    queryById(id).result.headOption
+  //will have to be one query on the "owning side" which is the annotation
+  //two queries instead of the join (for now)
+
+  /**
+   * Return images with optional annotations
+   *
+   * Performance concerns: Two queries instead of one for now. It's probably
+   * best to have less db queries (connection overhead, network latency, load on db),
+   * but its also possible left joins can wreak havoc in some cases (causes CPU issues)
+   * Multiple queries are fine here for prototype/demo purposes.
+   * @param id
+   * @return
+   */
+  def findById(id: ImageId): Future[Option[FullImageData]] = {
+    for {
+      imageData <- db.run(queryById(id).result.headOption)
+      if imageData.isDefined
+      annotationData <- db.run(annotations.filter(_.imageId === id).result)
+    } yield imageData.map { image => FullImageData(image, annotationData) }
   }
 
   /**
-   * List all the images in the database.
-   * TODO: lets figure out how to join with annotations blargh.
+   * List all possibly annotated images in the database.
+   * One query with a left join! (debug logging you can see generated query "Compiled server-side to")
+   * TODO: pagination and limits would help here.
    */
-  def list(): Future[Seq[ImageData]] = db.run {
-    images.result
+  def list(): Future[Seq[FullImageData]] = db.run {
+    images.withAnnotations.result.map { imageAnnotationRows => {
+      val groupedByImageData = imageAnnotationRows.groupBy(x => x._1).map {
+        case (image, imageAnnotationTuples) => (image, imageAnnotationTuples.flatMap(_._2))
+      }
+      groupedByImageData.toSeq.map(tuple => FullImageData(tuple._1, tuple._2))
+    }}
   }
 
   /**
@@ -162,9 +191,16 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
     images.filter(_.id === data.id).delete
   }
 
-  def remove(id: ImageId): Future[Int] = db.run {
-    queryById(id).delete
+  //TODO: broken keep on foreign key constraint violation.
+  def remove(id: ImageId): Future[Int] = {
+    db.run((annotations.filter(_.imageId === id).delete andThen queryById(id).delete)
+      .transactionally)
+    /*for {
+      _ <- db.run(annotations.filter(_.imageId === id).delete)
+      deletedImage <- db.run(images.filter(_.id === id).delete)
+    } yield deletedImage*/
   }
+
 
   /******************** Annotations Section TODO: rip this out to its own repo home *********************/
 

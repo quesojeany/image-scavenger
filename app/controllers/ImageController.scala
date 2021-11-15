@@ -26,10 +26,12 @@ object ImageController {
 
 /**
  * Main controller to handle CRUD Rest operations for IMAGES
- * @param standalone web service library needed to make http calls out to google cloud (todo think about encapsulating logic in a client class)
- * @param imageResourceHandler dto to handle operations on imageresources
- * @param cc i18N support
- * @param ec implicit execution context (default is a fork join in play)
+ *
+ * @param imageResourceHandler dto to handle operations on image resources
+ * @param cc I18N support
+ * @param ss storage service for files
+ * @param ds object detection service
+ * @param ec ec implicit execution context (default is a fork join in play)
  */
 class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
                                   cc: MessagesControllerComponents,
@@ -40,7 +42,7 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
 
   import ImageController.logger
 
-  // create a "Form" to take advantage of built in validation/error handling; TODO fix/update validaiton/fields
+  // create a "Form" to take advantage of built in validation/error handling; TODO fix/update validation/fields
   Form(
     mapping(
       "name" -> nonEmptyText,
@@ -96,9 +98,9 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
   /**
    * A REST endpoint that gets all the images as JSON.
    * If none, returns empty json array.
-   * TODO: Search by annotation or tag (;
+   * TODO: implement search by annotation (;
    */
-  def list = Action.async { implicit request =>
+  def list(name: Option[String] = None) = Action.async { implicit request =>
     imageResourceHandler.list().map { images =>
       Ok(Json.toJson(images))
     }
@@ -178,7 +180,7 @@ class ImageController @Inject()(imageResourceHandler: ImageResourceHandler,
    */
   private def deleteTempFile(file: File) = {
     val size = JFiles.size(file.toPath)
-    logger.info(s"size = ${size}")
+    logger.info(s"size = $size")
     JFiles.deleteIfExists(file.toPath)
     size
   }
