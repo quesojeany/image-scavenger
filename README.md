@@ -81,7 +81,6 @@ Mostly feature complete with a few regrets, ehem improvements (it is a POC):
     * update
     * count
     * sublist
-    * detected 
 * Happy path time! 
   * Validation: Leverage Play's Form for json, and play json validate for des/ser of 3rd party requests/responses
   * Error handling: Could have used some TLC, especially regarding dependent service and repo responses
