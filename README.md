@@ -61,7 +61,7 @@ Search for images based on detected objects
   * [Play Framework](https://www.playframework.com/) based on [Akka Http](https://doc.akka.io/docs/akka-http/current/index.html)
   * [Play Standalone Client](https://www.playframework.com/documentation/2.8.x/ScalaWS)
 * Persistence
-  * [Slick](https://scala-slick.org/) (with a lil' help from [Play Slick](https://www.playframework.com/documentation/2.8.x/PlaySlick) 
+  * [Slick](https://scala-slick.org/) (with a lil' help from [Play Slick](https://www.playframework.com/documentation/2.8.x/PlaySlick)) 
   * [Evolutions](https://www.playframework.com/documentation/2.8.x/Evolutions)
   * [H2](https://www.h2database.com/html/main.html) (for poc/demo)
 * Testing *(stay tuned, poop)*
@@ -75,11 +75,13 @@ Search for images based on detected objects
 Mostly feature complete with a few regrets, ehem improvements (it is a POC):
 * Rest API Notes
   * Detection on file urls only. Uploading corrupted files; the pain is real.
-  * Removing images is failing.
-  * Nice to haves for the future:
+  * Removing images is broken.
+  * Detected objects' name only stored (could include coordinates)
+  * Nice to have entity methods:
     * update
     * count
     * sublist
+    * detected 
 * Happy path time! 
   * Validation: Leverage Play's Form for json, and play json validate for des/ser of 3rd party requests/responses
   * Error handling: Could have used some TLC, especially regarding dependent service and repo responses
@@ -94,6 +96,7 @@ Mostly feature complete with a few regrets, ehem improvements (it is a POC):
 * Auto-Code Formatting
   * [scalafmt](https://scalameta.org/scalafmt/)
 * Developer Etiquette~ Would love more time to polish/cleanup the code a bit. Make it even more expressive/readable and concise with Scala sugar!
+* Build a lightweight ui in angular or react to call rest api
 * To be continued when I remember yet another thing...oh yeah, make this readme prettier. (;
 
 ###### Happy Hunting, Cheers!  ~quesojean
