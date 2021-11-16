@@ -1,4 +1,4 @@
-##Image Scavenger
+# Image Scavenger
 
 ---
 
@@ -51,7 +51,7 @@ Search for images based on detected objects
 
 ---
 
-##Tech Stack 
+## Tech Stack 
 
 * Detection Service
   * [Google Vision Api](https://cloud.google.com/vision)
@@ -69,8 +69,8 @@ Search for images based on detected objects
   * Integration: [Runscope](https://www.runscope.com/)
   * Manual: [Postman](https://www.postman.com/)
 
-##@TODO Notes
-####*(codeIsNeverDone!)*
+## @TODO Notes
+#### *(codeIsNeverDone!)*
 
 Mostly feature complete with a few regrets, ehem improvements (it is a POC):
 * Rest API Notes
@@ -94,7 +94,7 @@ Mostly feature complete with a few regrets, ehem improvements (it is a POC):
 * Auto-Code Formatting
   * [scalafmt](https://scalameta.org/scalafmt/)
 * Developer Etiquette~ Would love more time to polish/cleanup the code a bit. Make it even more expressive/readable and concise with Scala sugar!
-* To be continued when I remember yet another thing...
+* To be continued when I remember yet another thing...oh yeah, make this readme prettier. (;
 
 ###### Happy Hunting, Cheers! 
 ######~quesojean
