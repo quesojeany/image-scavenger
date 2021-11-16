@@ -56,7 +56,7 @@ object GoogleDetectionService {
   val logger = Logger(getClass)
   /* Response case classes: Needed really just for reading/deser, so oformat is overkill
   but whatever - its less typing, so yay! */
-  case class NormalizedVertices(x: Double, y: Double)
+  case class NormalizedVertices(x: Option[Double] = None, y: Option[Double] = None)
   object NormalizedVertices {
     implicit val normalizedVertexFormat = Json.using[Json.WithDefaultValues].format[NormalizedVertices]
   }
