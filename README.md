@@ -51,7 +51,7 @@ Search for images based on detected objects
 
 ---
 
-## Tech Stack 
+## Tech Fiesta 
 
 * Detection Service
   * [Google Vision Api](https://cloud.google.com/vision)
