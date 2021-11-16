@@ -125,7 +125,7 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
 
   private def insertImage(imageData: ImageData) = {
     (images.map(i => (i.name, i.path, i.detectionEnabled))
-      // Now define it to return the id, because we want to know what id was generated for the person
+      // Now define it to return the id, because we want to know what id was generated for the image
       returning images.map(_.id)
       // And we define a transformation for the returned value, which combines our original parameters with the
       // returned id
@@ -135,18 +135,18 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   }
 
   private def insertAnnotations(annotationData: Seq[AnnotationData]) = {
-    val test = annotationData.map(poop => {
+    val annotationTuples = annotationData.map(poop => {
       (poop.name, poop.imageId)
     })
 
     (annotations.map(a => (a.name, a.imageId))
-      // Now define it to return the id, because we want to know what id was generated for the person
+      // Now define it to return the id, because we want to know what id was generated for the annotation
       returning annotations.map(_.id)
       // And we define a transformation for the returned value, which combines our original parameters with the
       // returned id
       into ((nameImageId, id) => AnnotationData(id, nameImageId._1, nameImageId._2))
       // And finally, insert the annotations into the database
-      ) ++= test
+      ) ++= annotationTuples
   }
 
   /**
@@ -162,7 +162,6 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   def findById(id: ImageId): Future[Option[FullImageData]] = {
     for {
       imageData <- db.run(queryById(id).result.headOption)
-      if imageData.isDefined
       annotationData <- db.run(annotations.filter(_.imageId === id).result)
     } yield imageData.map { image => FullImageData(image, annotationData) }
   }
