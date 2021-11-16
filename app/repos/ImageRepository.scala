@@ -162,7 +162,6 @@ class ImageRepository @Inject()(dbConfigProvider: DatabaseConfigProvider)(implic
   def findById(id: ImageId): Future[Option[FullImageData]] = {
     for {
       imageData <- db.run(queryById(id).result.headOption)
-      if imageData.isDefined
       annotationData <- db.run(annotations.filter(_.imageId === id).result)
     } yield imageData.map { image => FullImageData(image, annotationData) }
   }
