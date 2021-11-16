@@ -96,8 +96,7 @@ Mostly feature complete with a few regrets, ehem improvements (it is a POC):
 * Developer Etiquette~ Would love more time to polish/cleanup the code a bit. Make it even more expressive/readable and concise with Scala sugar!
 * To be continued when I remember yet another thing...oh yeah, make this readme prettier. (;
 
-###### Happy Hunting, Cheers! 
-######~quesojean
+###### Happy Hunting, Cheers!  ~quesojean
 
 
 
